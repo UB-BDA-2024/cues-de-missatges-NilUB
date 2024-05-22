@@ -1,4 +1,3 @@
-
 CREATE TABLE IF NOT EXISTS sensor_data (
     sensor_id int NOT NULL,
     velocity float,
@@ -6,7 +5,7 @@ CREATE TABLE IF NOT EXISTS sensor_data (
     humidity float,
     battery_level float NOT NULL,
     last_seen timestamp NOT NULL,
-    primary key(sensor_id, last_seen)
+    PRIMARY KEY(sensor_id, last_seen)
 );
 
 SELECT create_hypertable(
@@ -14,6 +13,8 @@ SELECT create_hypertable(
     'last_seen',
     if_not_exists => true
 );
+
+CREATE UNIQUE INDEX time ON sensor_data(sensor_id, last_seen)
 
 CREATE MATERIALIZED VIEW
 hour (
