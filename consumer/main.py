@@ -1,6 +1,5 @@
-import os
-
 import fastapi
+import os
 from .sensors.controller import router as sensorsRouter
 from yoyo import read_migrations
 from yoyo import get_backend
@@ -14,9 +13,6 @@ with backend.lock():
     backend.apply_migrations(backend.to_apply(migrations))
 
 app = fastapi.FastAPI(title="Senser", version="0.1.0-alpha.1")
-
-#TODO: Apply new TS migrations using Yoyo
-#Read docs: https://ollycope.com/software/yoyo/latest/
 
 app.include_router(sensorsRouter)
 
