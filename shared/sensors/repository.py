@@ -25,7 +25,6 @@ class DataCommand():
         self.to_time = to_time
         self.bucket = bucket
 
-
 def get_sensor(db: Session, sensor_id: int) -> Optional[models.Sensor]:
     return db.query(models.Sensor).filter(models.Sensor.id == sensor_id).first()
 
@@ -41,51 +40,72 @@ def get_sensor_mongo(mongodb: MongoDBClient, db_sensor: models.Sensor) -> schema
     return sensor_dict
 
 def create_sensor(db: Session, sensor: schemas.SensorCreate, mongodb: MongoDBClient, esdb: ElasticsearchClient, cassandra: CassandraClient) -> schemas.Sensor:
-    db_sensor = models.Sensor(name=sensor.name, latitude=sensor.latitude, longitude=sensor.longitude, type=sensor.type, mac_address=sensor.mac_address, manufacturer=sensor.manufacturer, model=sensor.model, serie_number=sensor.serie_number, firmware_version=sensor.firmware_version, description=sensor.description)
+    db_sensor = models.Sensor(name=sensor.name)
+
     db.add(db_sensor)
     db.commit()
     db.refresh(db_sensor)
 
-    mongodb.insertDoc(sensor.dict())
-    
-    #Afegim el name, type i description
-    data = {
+    db_sensor_data = sensor.dict()
+    # Guardem a MONGODB
+    mongodb.insertDoc(db_sensor_data)
+
+    elastic_data = {
         'name': sensor.name,
         'type': sensor.type,
         'description': sensor.description
     }
-    esdb.index_document(index_name="sensors", document=data)
-    sensor_dict = sensor.dict()
-    sensor_dict.update({'id': db_sensor.id})
 
-    #Guardamos el id y el type en la tabla quantity
-    query_increment = f"INSERT INTO sensor.quantity(id, type) VALUES ({db_sensor.id}, '{sensor.type}');"
-    cassandra.execute(query_increment)
-    return sensor_dict
+    esdb.index_document('sensors', elastic_data)
+
+    db_sensor_dict = sensor.dict()
+    db_sensor_dict.update({'id': db_sensor.id})
+
+    cassandra.execute(f"""
+                    UPDATE sensor.quantity
+                    SET quantity = quantity + 1 
+                    WHERE type = '{sensor.type}';
+                    """
+                      )
+
+    return db_sensor_dict
 
 def record_data(redis: RedisClient, sensor_id: int, data: schemas.SensorData, timescale: Timescale, cassandra: CassandraClient) -> schemas.SensorData:
-    #Cogemos los datos de data y lo pasamos a un diccionario
-    data_sensor = data.dict()
+    ts_query = """
+                INSERT INTO sensor_data 
+                (sensor_id, velocity, temperature, humidity, battery_level, last_seen) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (sensor_id, last_seen) DO UPDATE SET
+                velocity = EXCLUDED.velocity,
+                temperature = EXCLUDED.temperature,
+                humidity = EXCLUDED.humidity,
+                battery_level = EXCLUDED.battery_level;
+                """
+    db_sensordata = data
+    ts_values =(sensor_id, data.velocity, data.temperature, data.humidity, data.battery_level, data.last_seen)
+    redis.set(sensor_id, json.dumps(data.dict()))
+    timescale.insert(ts_query, ts_values)
+    timescale.refresh_tables()
 
-    #Tenemos que transformar los datos que sean None a Null para poderlas poner en SQL
-    new_data = {key: ('NULL' if value is None else value if key != 'last_seen' else f"'{value}'") for key, value in data_sensor.items()}
 
-    #Creamos la query para añadir los datos a TimescaleDB
-    query_sin_parametros = "INSERT INTO sensor_data (id, temperature, humidity, velocity, battery_level, last_seen) VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT (id, last_seen) DO UPDATE SET temperature = EXCLUDED.temperature, humidity = EXCLUDED.humidity, velocity = EXCLUDED.velocity, battery_level = EXCLUDED.battery_level;"
-    query = query_sin_parametros % (sensor_id, new_data['temperature'], new_data['humidity'], new_data['velocity'], new_data['battery_level'], new_data['last_seen'])
-    timescale.execute(query)
-    timescale.execute("commit")
 
-    #Guardamos la temperatura
     if data.temperature is not None:
-        query = f"INSERT INTO sensor.temperature(id, temperature) VALUES ({sensor_id}, {data.temperature});"
-        cassandra.execute(query)
+        cassandra.execute(f"""
+            INSERT INTO sensor.temperature
+            (sensor_id, temperature, timestamp)
+            VALUES ({sensor_id}, {data.temperature}, toTimestamp(now()))
+            """
+        )
 
-    #Guardamos la battery
-    cassandra.execute(f"INSERT INTO sensor.battery(id, battery_level) VALUES ({sensor_id}, {data.battery_level});")
+    if data.battery_level is not None:
+        cassandra.execute(f"""
+            INSERT INTO sensor.battery
+            (sensor_id, battery_level, timestamp)
+            VALUES ({sensor_id}, {data.battery_level}, toTimestamp(now()))
+            """
+        )
 
-    redis.set(sensor_id, json.dumps(data_sensor))
-    return json.loads(redis.get(sensor_id))
+    return db_sensordata
 
 def get_data(redis: RedisClient, db_sensor: models.Sensor):
     db_data = redis.get(db_sensor.id)
