@@ -1,3 +1,4 @@
+
 CREATE TABLE IF NOT EXISTS sensor_data (
     sensor_id int NOT NULL,
     velocity float,
@@ -5,7 +6,7 @@ CREATE TABLE IF NOT EXISTS sensor_data (
     humidity float,
     battery_level float NOT NULL,
     last_seen timestamp NOT NULL,
-    PRIMARY KEY(sensor_id, last_seen)
+    primary key(sensor_id, last_seen)
 );
 
 SELECT create_hypertable(
