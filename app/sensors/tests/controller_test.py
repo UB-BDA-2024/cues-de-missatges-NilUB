@@ -227,6 +227,7 @@ def test_get_values_sensor_temperatura():
                      "values": [{"max_temperature": 17.0, "min_temperature": 15.0,
                                  "average_temperature": 16.0}]}]}
     
+    
 def test_get_sensors_quantity():
     response = client.get("/sensors/quantity_by_type")
     assert response.status_code == 200
