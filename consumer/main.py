@@ -1,13 +1,22 @@
-import json
+import fastapi
+import os
+from .sensors.controller import router as sensorsRouter
+from yoyo import read_migrations
+from yoyo import get_backend
 
-from shared.subscriber import Subscriber
+backend = get_backend('postgresql://timescale:timescale@timescale:5433/timescale')
+path = os.path.dirname(os.path.realpath('migrations_ts/migrations_ts.sql'))
+migrations = read_migrations(path)
 
-subscriber = Subscriber()
+with backend.lock():
+    # Apply any outstanding migrations
+    backend.apply_migrations(backend.to_apply(migrations))
 
+app = fastapi.FastAPI(title="Senser", version="0.1.0-alpha.1")
 
-def callback(ch, method, properties, body):
-    data = json.loads(body)
-    print("Received data:", data)
+app.include_router(sensorsRouter)
 
-
-subscriber.subscribe(callback)
+@app.get("/")
+def index():
+    #Return the api name and version
+    return {"name": app.title, "version": app.version}
