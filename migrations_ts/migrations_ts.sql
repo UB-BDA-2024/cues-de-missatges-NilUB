@@ -14,7 +14,6 @@ SELECT create_hypertable(
     if_not_exists => true
 );
 
-CREATE UNIQUE INDEX time ON sensor_data(sensor_id, last_seen)
 
 CREATE MATERIALIZED VIEW
 hour (

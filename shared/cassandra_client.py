@@ -7,42 +7,20 @@ class CassandraClient:
         self.init_tables()
 
     def init_tables(self):
-        #Crea el keyspace para el cassandra
-        keyspace_query = """
-            CREATE KEYSPACE IF NOT EXISTS sensor 
-            WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
-            """
-        self.session.execute(keyspace_query)
+            keyspace_query = "CREATE KEYSPACE IF NOT EXISTS sensor WITH REPLICATION = { 'class': 'SimpleStrategy', 'replication_factor': 1};"
+            self.session.execute(keyspace_query)
 
-        table_query_temperature = """
-            CREATE TABLE IF NOT EXISTS sensor.temperature (
-                sensor_id int,
-                temperature float,
-                timestamp timestamp,
-                PRIMARY KEY (sensor_id, timestamp)
-            );
-            """
-        self.session.execute(table_query_temperature)
+            #Creamos la tabla de temperature
+            temperature_table_query = "CREATE TABLE IF NOT EXISTS sensor.temperature(id int, temperature float, PRIMARY KEY(id, temperature));"
+            self.session.execute(temperature_table_query)  
 
-        table_query_quantity = """
-            CREATE TABLE IF NOT EXISTS sensor.quantity (
-                type text,
-                quantity counter,
-                PRIMARY KEY (type)
-            );
-            """
-        self.session.execute(table_query_quantity)
+            #Creamos la tabla de quantity
+            quantity_table_query = "CREATE TABLE IF NOT EXISTS sensor.quantity(id int, type text, PRIMARY KEY(type, id));"
+            self.session.execute(quantity_table_query)
 
-        table_query_battery = """
-            CREATE TABLE IF NOT EXISTS sensor.battery (
-                sensor_id int,
-                battery_level float,
-                timestamp timestamp,
-                PRIMARY KEY (sensor_id, timestamp)
-            );
-            """
-        self.session.execute(table_query_battery)
-
+            #Creamos la tabla de battery level
+            battery_table_query = "CREATE TABLE IF NOT EXISTS sensor.battery(id int, battery_level float, PRIMARY KEY(battery_level, id));"
+            self.session.execute(battery_table_query)
 
     def get_session(self):
         return self.session
