@@ -25,6 +25,7 @@ class DataCommand():
         self.to_time = to_time
         self.bucket = bucket
 
+
 def get_sensor(db: Session, sensor_id: int) -> Optional[models.Sensor]:
     return db.query(models.Sensor).filter(models.Sensor.id == sensor_id).first()
 
